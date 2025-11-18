@@ -165,8 +165,8 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser, users, onLog
     { key: 'total', title: 'Total Orders', value: statsData.totalOrders.toString(), icon: <CollectionIcon className="w-8 h-8 text-blue-500" /> },
     { key: 'completed', title: 'Completed Orders', value: statsData.completedOrders.toString(), icon: <CheckCircleIcon className="w-8 h-8 text-green-500" /> },
     { key: 'pending', title: 'Pending Orders', value: statsData.pendingOrders.toString(), icon: <ClockIcon className="w-8 h-8 text-yellow-500" /> },
-    { key: 'received', title: 'Amount Received', value: `$${statsData.amountReceived.toLocaleString()}`, icon: <CurrencyDollarIcon className="w-8 h-8 text-indigo-500" /> },
-    { key: 'pending_amount', title: 'Amount Pending', value: `$${statsData.amountPending.toLocaleString()}`, icon: <CreditCardIcon className="w-8 h-8 text-orange-500" /> },
+    { key: 'received', title: 'Amount Received', value: `₹${statsData.amountReceived.toLocaleString('en-IN')}`, icon: <CurrencyDollarIcon className="w-8 h-8 text-indigo-500" /> },
+    { key: 'pending_amount', title: 'Amount Pending', value: `₹${statsData.amountPending.toLocaleString('en-IN')}`, icon: <CreditCardIcon className="w-8 h-8 text-orange-500" /> },
   ];
 
   const getDetailsData = () => {

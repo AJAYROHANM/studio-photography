@@ -61,7 +61,7 @@ const EventCard: React.FC<EventCardProps> = ({ date, details }) => {
         </div>
         <div className="flex items-center font-medium">
           <CurrencyDollarIcon className="w-4 h-4 mr-2 text-gray-400 flex-shrink-0" />
-          <span>{details.amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</span>
+          <span>{details.amount.toLocaleString('en-IN', { style: 'currency', currency: 'INR' })}</span>
         </div>
       </div>
     </div>

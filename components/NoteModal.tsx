@@ -91,7 +91,7 @@ const NoteModal: React.FC<NoteModalProps> = ({ isOpen, onClose, date, event, onS
             <input
               type="number"
               className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-brand-primary focus:outline-none"
-              placeholder="Amount ($)"
+              placeholder="Amount (₹)"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
             />

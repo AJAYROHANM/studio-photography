@@ -57,7 +57,7 @@ const EventCard: React.FC<EventCardProps> = ({ date, details, onSettle }) => {
         </div>
         <div className="flex items-center font-medium">
           <CurrencyDollarIcon className="w-4 h-4 mr-2 text-gray-400 flex-shrink-0" />
-          <span>{details.amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</span>
+          <span>{details.amount.toLocaleString('en-IN', { style: 'currency', currency: 'INR' })}</span>
         </div>
       </div>
        <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700 flex justify-end">
@@ -103,7 +103,7 @@ const PendingPaymentsPage: React.FC<PendingPaymentsPageProps> = ({ events, total
             isOpen={!!settleCandidate}
             title="Confirm Settlement"
             message={
-                settleCandidate ? `Settle payment of ${settleCandidate.details.amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })} for the event "${settleCandidate.details.text}"?` : ''
+                settleCandidate ? `Settle payment of ${settleCandidate.details.amount.toLocaleString('en-IN', { style: 'currency', currency: 'INR' })} for the event "${settleCandidate.details.text}"?` : ''
             }
             onConfirm={handleConfirmSettle}
             onCancel={handleCancelSettle}
@@ -126,7 +126,7 @@ const PendingPaymentsPage: React.FC<PendingPaymentsPageProps> = ({ events, total
       <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg mb-6">
         <p className="text-sm text-gray-500 dark:text-gray-400">Total Amount Pending</p>
         <p className="text-4xl font-bold text-brand-primary">
-            {totalAmount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+            {totalAmount.toLocaleString('en-IN', { style: 'currency', currency: 'INR' })}
         </p>
       </div>
 

@@ -25,7 +25,7 @@ const ReminderBanner: React.FC<ReminderBannerProps> = ({ reminders, onDismiss })
             {reminders.map((reminder, index) => (
               <div key={index} className="text-sm">
                 <p>
-                  <span className="font-semibold">{reminder.type}:</span> {reminder.details.text} at <span className="font-medium">{reminder.details.place}</span> for <span className="font-medium">{reminder.details.amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</span>.
+                  <span className="font-semibold">{reminder.type}:</span> {reminder.details.text} at <span className="font-medium">{reminder.details.place}</span> for <span className="font-medium">{reminder.details.amount.toLocaleString('en-IN', { style: 'currency', currency: 'INR' })}</span>.
                 </p>
               </div>
             ))}
