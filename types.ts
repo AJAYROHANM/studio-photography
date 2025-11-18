@@ -6,8 +6,14 @@ export interface EventDetails {
   status: 'pending' | 'completed';
 }
 
+export interface EventDetailsWithUser extends EventDetails {
+  userId: string;
+  userName: string;
+  userPhoto: string;
+}
+
 export interface EventData {
-  [dateKey: string]: EventDetails;
+  [dateKey: string]: EventDetailsWithUser;
 }
 
 export interface User {
@@ -18,4 +24,9 @@ export interface User {
   name: string;
   phone: string;
   photo: string; // URL
+}
+
+export interface Reminder {
+  type: 'Today' | 'Tomorrow';
+  details: EventDetailsWithUser;
 }

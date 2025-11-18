@@ -5,9 +5,10 @@ import { ChevronLeftIcon, ChevronRightIcon } from './icons/Icons';
 interface CalendarProps {
   events: EventData;
   onDateSelect: (date: Date) => void;
+  highlightedDates?: Set<string>;
 }
 
-const Calendar: React.FC<CalendarProps> = ({ events, onDateSelect }) => {
+const Calendar: React.FC<CalendarProps> = ({ events, onDateSelect, highlightedDates }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
 
   const daysOfWeek = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
@@ -42,13 +43,13 @@ const Calendar: React.FC<CalendarProps> = ({ events, onDateSelect }) => {
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
-        <button onClick={() => changeMonth(-1)} className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700">
+        <button onClick={() => changeMonth(-1)} className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
           <ChevronLeftIcon className="w-6 h-6" />
         </button>
         <h3 className="text-lg font-semibold">
           {currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })}
         </h3>
-        <button onClick={() => changeMonth(1)} className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700">
+        <button onClick={() => changeMonth(1)} className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
           <ChevronRightIcon className="w-6 h-6" />
         </button>
       </div>
@@ -64,17 +65,18 @@ const Calendar: React.FC<CalendarProps> = ({ events, onDateSelect }) => {
           const hasEvent = !!events[dateKey];
           const isCurrentMonth = date.getMonth() === currentDate.getMonth();
           const isTodaysDate = isToday(date);
+          const isHighlighted = highlightedDates?.has(dateKey);
 
           return (
             <div
               key={index}
-              className={`p-1 cursor-pointer border border-transparent rounded-lg transition-colors ${isCurrentMonth ? 'text-gray-700 dark:text-gray-300' : 'text-gray-400 dark:text-gray-600'} hover:bg-blue-100 dark:hover:bg-blue-900`}
+              className={`p-1 cursor-pointer rounded-lg transition-colors ${isCurrentMonth ? 'text-gray-700 dark:text-gray-300' : 'text-gray-400 dark:text-gray-600'} hover:bg-blue-100 dark:hover:bg-blue-900/50`}
               onClick={() => onDateSelect(date)}
             >
-              <div className={`relative flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 mx-auto rounded-full ${isTodaysDate ? 'bg-brand-primary text-white' : ''} ${!isTodaysDate && hasEvent ? 'bg-yellow-200 dark:bg-yellow-700' : ''}`}>
+              <div className={`relative flex items-center justify-center w-8 h-8 mx-auto rounded-full transition-all duration-200 ${isTodaysDate ? 'text-brand-primary font-bold ring-2 ring-brand-primary' : ''} ${isHighlighted ? 'bg-blue-200 dark:bg-blue-800/50' : ''}`}>
                 <span>{date.getDate()}</span>
-                {hasEvent && !isTodaysDate && (
-                  <span className="absolute bottom-0 right-0 block w-2 h-2 bg-yellow-500 rounded-full"></span>
+                {hasEvent && (
+                  <span className="absolute bottom-1 right-1 block w-1.5 h-1.5 bg-yellow-500 rounded-full"></span>
                 )}
               </div>
             </div>

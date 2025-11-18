@@ -1,5 +1,5 @@
 import React from 'react';
-import { EventDetails } from '../types';
+import { EventDetailsWithUser } from '../types';
 import { 
   ChevronLeftIcon, 
   CheckCircleIcon, 
@@ -11,21 +11,23 @@ import {
 
 interface EventWithDate {
   date: string;
-  details: EventDetails;
+  details: EventDetailsWithUser;
 }
 
 interface DetailsPageProps {
   title: string;
   events: EventWithDate[];
   onBack: () => void;
+  isAdmin: boolean;
 }
 
 interface EventCardProps {
     date: string;
-    details: EventDetails;
+    details: EventDetailsWithUser;
+    isAdmin: boolean;
 }
 
-const EventCard: React.FC<EventCardProps> = ({ date, details }) => {
+const EventCard: React.FC<EventCardProps> = ({ date, details, isAdmin }) => {
   const formattedDate = new Date(date + 'T00:00:00').toLocaleDateString('en-US', {
     weekday: 'long',
     year: 'numeric',
@@ -54,7 +56,7 @@ const EventCard: React.FC<EventCardProps> = ({ date, details }) => {
           <span className="capitalize">{details.status}</span>
         </div>
       </div>
-      <div className="mt-4 border-t border-gray-200 dark:border-gray-700 pt-3 flex flex-col sm:flex-row sm:items-center sm:justify-between text-sm text-gray-600 dark:text-gray-300 gap-2 sm:gap-4">
+      <div className="mt-4 border-t border-gray-200 dark:border-gray-700 pt-3 flex flex-wrap items-center justify-between text-sm text-gray-600 dark:text-gray-300 gap-y-2 gap-x-4">
         <div className="flex items-center">
           <LocationMarkerIcon className="w-4 h-4 mr-2 text-gray-400 flex-shrink-0" />
           <span className="truncate">{details.place}</span>
@@ -63,13 +65,19 @@ const EventCard: React.FC<EventCardProps> = ({ date, details }) => {
           <CurrencyDollarIcon className="w-4 h-4 mr-2 text-gray-400 flex-shrink-0" />
           <span>{details.amount.toLocaleString('en-IN', { style: 'currency', currency: 'INR' })}</span>
         </div>
+         {isAdmin && (
+            <div className="flex items-center text-xs text-gray-500 dark:text-gray-400 w-full sm:w-auto justify-end sm:justify-start pt-2 sm:pt-0 border-t sm:border-none border-gray-100 dark:border-gray-700/50">
+                <img src={details.userPhoto} alt={details.userName} className="w-5 h-5 rounded-full object-cover mr-2" />
+                <span>{details.userName}</span>
+            </div>
+        )}
       </div>
     </div>
   );
 };
 
 
-const DetailsPage: React.FC<DetailsPageProps> = ({ title, events, onBack }) => {
+const DetailsPage: React.FC<DetailsPageProps> = ({ title, events, onBack, isAdmin }) => {
   return (
     <div className="animate-fade-in">
       <header className="flex items-center mb-6">
@@ -91,7 +99,7 @@ const DetailsPage: React.FC<DetailsPageProps> = ({ title, events, onBack }) => {
       ) : (
         <div className="space-y-4">
           {events.map(({ date, details }) => (
-            <EventCard key={date} date={date} details={details} />
+            <EventCard key={date} date={date} details={details} isAdmin={isAdmin} />
           ))}
         </div>
       )}

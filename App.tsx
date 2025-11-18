@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
@@ -13,7 +14,23 @@ const App: React.FC = () => {
     let storedUsers: User[] = [];
     try {
       const usersJson = localStorage.getItem('appUsers');
-      storedUsers = usersJson ? JSON.parse(usersJson) : [];
+      const parsedUsers = usersJson ? JSON.parse(usersJson) : [];
+      if (Array.isArray(parsedUsers)) {
+          // FIX: Add a more robust filter to ensure every user object is valid,
+          // preventing crashes from corrupted localStorage data.
+          storedUsers = parsedUsers.filter(
+            (user): user is User => 
+              user && 
+              typeof user === 'object' &&
+              !Array.isArray(user) &&
+              typeof user.id === 'string' && 
+              typeof user.username === 'string' &&
+              typeof user.name === 'string' &&
+              typeof user.phone === 'string' &&
+              typeof user.photo === 'string' &&
+              (user.role === 'admin' || user.role === 'user')
+          );
+      }
     } catch (e) {
       console.error("Failed to parse users from localStorage", e);
       storedUsers = [];

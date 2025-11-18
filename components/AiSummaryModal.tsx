@@ -1,15 +1,18 @@
+
 import React, { useState, useEffect } from 'react';
 import { GoogleGenAI } from '@google/genai';
-import { EventData } from '../types';
+import { EventData, EventDetailsWithUser } from '../types';
 import { SparklesIcon, XIcon } from './icons/Icons';
 
 interface AiSummaryModalProps {
   isOpen: boolean;
   onClose: () => void;
   events: EventData;
+  isAdmin: boolean;
+  searchQuery?: string;
 }
 
-const AiSummaryModal: React.FC<AiSummaryModalProps> = ({ isOpen, onClose, events }) => {
+const AiSummaryModal: React.FC<AiSummaryModalProps> = ({ isOpen, onClose, events, isAdmin, searchQuery }) => {
   const [summary, setSummary] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
@@ -22,7 +25,10 @@ const AiSummaryModal: React.FC<AiSummaryModalProps> = ({ isOpen, onClose, events
 
   const generateSummary = async () => {
     if (Object.keys(events).length === 0) {
-      setSummary("You don't have any events scheduled. Add some events to your calendar to get a summary!");
+      const message = searchQuery 
+        ? `No events found matching your search for "${searchQuery}". Try a different search term!`
+        : "You don't have any events scheduled. Add some events to your calendar to get a summary!";
+      setSummary(message);
       setIsLoading(false);
       setError('');
       return;
@@ -34,16 +40,22 @@ const AiSummaryModal: React.FC<AiSummaryModalProps> = ({ isOpen, onClose, events
 
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
+      
+      const eventValues = Object.values(events);
+      // FIX: Explicitly type 'e' as EventDetailsWithUser to fix type inference issue.
+      const isMultiUser = isAdmin && eventValues.length > 1 && new Set(eventValues.map((e: EventDetailsWithUser) => e.userId)).size > 1;
 
       const prompt = `
         You are a helpful assistant for a photographer using a dashboard to manage their photo shoot orders.
         Based on the following event data (in JSON format), provide a concise and friendly summary.
-        The data shows events keyed by date (YYYY-MM-DD). Each event has a description ('text'), a venue ('place'), a payment amount ('amount'), and a payment status ('pending' or 'completed').
+        The data shows events keyed by date (YYYY-MM-DD). Each event has a description ('text'), a venue ('place'), a payment amount ('amount'), a payment status ('pending' or 'completed'), and user details ('userId', 'userName', 'userPhoto').
+        ${searchQuery ? `The user has filtered the data with the search term: "${searchQuery}". Your summary MUST be based ONLY on the provided filtered data.` : ''}
 
         Your summary should highlight:
         - The total number of upcoming events.
         - The total amount in pending payments.
         - The busiest day or period based on the schedule.
+        ${isMultiUser ? "- Insights about user activity, such as who has the most pending payments or upcoming events." : ""}
         - Conclude with a friendly, encouraging remark.
 
         Format the key points as a bulleted list.

@@ -1,18 +1,14 @@
 import React from 'react';
-import { EventDetails } from '../types';
+import { EventDetailsWithUser, Reminder } from '../types';
 import { BellIcon, XIcon } from './icons/Icons';
-
-interface Reminder {
-  type: 'Today' | 'Tomorrow';
-  details: EventDetails;
-}
 
 interface ReminderBannerProps {
   reminders: Reminder[];
   onDismiss: () => void;
+  isAdmin: boolean;
 }
 
-const ReminderBanner: React.FC<ReminderBannerProps> = ({ reminders, onDismiss }) => {
+const ReminderBanner: React.FC<ReminderBannerProps> = ({ reminders, onDismiss, isAdmin }) => {
   return (
     <div className="relative bg-blue-100 dark:bg-blue-900/50 border-l-4 border-blue-500 text-blue-800 dark:text-blue-200 p-4 rounded-r-lg mb-6 shadow-md animate-fade-in" role="alert">
       <div className="flex">
@@ -26,6 +22,7 @@ const ReminderBanner: React.FC<ReminderBannerProps> = ({ reminders, onDismiss })
               <div key={index} className="text-sm">
                 <p>
                   <span className="font-semibold">{reminder.type}:</span> {reminder.details.text} at <span className="font-medium">{reminder.details.place}</span> for <span className="font-medium">{reminder.details.amount.toLocaleString('en-IN', { style: 'currency', currency: 'INR' })}</span>.
+                  {isAdmin && <span className="font-normal opacity-80"> (for {reminder.details.userName})</span>}
                 </p>
               </div>
             ))}

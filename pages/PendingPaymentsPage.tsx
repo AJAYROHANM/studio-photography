@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { EventDetails } from '../types';
+import { EventDetailsWithUser } from '../types';
 import { 
   ChevronLeftIcon,
   CheckCircleIcon, 
@@ -12,16 +12,17 @@ import ConfirmationModal from '../components/ConfirmationModal';
 
 interface EventWithDate {
   date: string;
-  details: EventDetails;
+  details: EventDetailsWithUser;
 }
 
 interface EventCardProps {
     date: string;
-    details: EventDetails;
+    details: EventDetailsWithUser;
     onSettle: () => void;
+    isAdmin: boolean;
 }
 
-const EventCard: React.FC<EventCardProps> = ({ date, details, onSettle }) => {
+const EventCard: React.FC<EventCardProps> = ({ date, details, onSettle, isAdmin }) => {
   const formattedDate = new Date(date + 'T00:00:00').toLocaleDateString('en-US', {
     weekday: 'long',
     year: 'numeric',
@@ -50,7 +51,7 @@ const EventCard: React.FC<EventCardProps> = ({ date, details, onSettle }) => {
           <span className="capitalize">{details.status}</span>
         </div>
       </div>
-      <div className="mt-4 border-t border-gray-200 dark:border-gray-700 pt-3 flex flex-col sm:flex-row sm:items-center sm:justify-between text-sm text-gray-600 dark:text-gray-300 gap-2 sm:gap-4">
+      <div className="mt-4 border-t border-gray-200 dark:border-gray-700 pt-3 flex flex-wrap items-center justify-between text-sm text-gray-600 dark:text-gray-300 gap-y-2 gap-x-4">
         <div className="flex items-center">
           <LocationMarkerIcon className="w-4 h-4 mr-2 text-gray-400 flex-shrink-0" />
           <span className="truncate">{details.place}</span>
@@ -59,6 +60,12 @@ const EventCard: React.FC<EventCardProps> = ({ date, details, onSettle }) => {
           <CurrencyDollarIcon className="w-4 h-4 mr-2 text-gray-400 flex-shrink-0" />
           <span>{details.amount.toLocaleString('en-IN', { style: 'currency', currency: 'INR' })}</span>
         </div>
+         {isAdmin && (
+            <div className="flex items-center text-xs text-gray-500 dark:text-gray-400 w-full sm:w-auto justify-end sm:justify-start pt-2 sm:pt-0 border-t sm:border-none border-gray-100 dark:border-gray-700/50">
+                <img src={details.userPhoto} alt={details.userName} className="w-5 h-5 rounded-full object-cover mr-2" />
+                <span>{details.userName}</span>
+            </div>
+        )}
       </div>
        <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700 flex justify-end">
           <button
@@ -77,9 +84,10 @@ interface PendingPaymentsPageProps {
   totalAmount: number;
   onBack: () => void;
   onSettlePayment: (dateKey: string) => void;
+  isAdmin: boolean;
 }
 
-const PendingPaymentsPage: React.FC<PendingPaymentsPageProps> = ({ events, totalAmount, onBack, onSettlePayment }) => {
+const PendingPaymentsPage: React.FC<PendingPaymentsPageProps> = ({ events, totalAmount, onBack, onSettlePayment, isAdmin }) => {
   const [settleCandidate, setSettleCandidate] = useState<EventWithDate | null>(null);
 
   const handleSettleClick = (event: EventWithDate) => {
@@ -145,6 +153,7 @@ const PendingPaymentsPage: React.FC<PendingPaymentsPageProps> = ({ events, total
                 date={event.date} 
                 details={event.details} 
                 onSettle={() => handleSettleClick(event)}
+                isAdmin={isAdmin}
               />
             ))}
           </div>

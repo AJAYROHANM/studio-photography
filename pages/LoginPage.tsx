@@ -29,8 +29,8 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
       className="flex items-center justify-center min-h-screen bg-cover bg-center"
       style={{ backgroundImage: "url('https://picsum.photos/1920/1080?grayscale&blur=2&random=1')" }}
     >
-      <div className="absolute inset-0 bg-black opacity-50"></div>
-      <div className="relative z-10 w-full max-w-md p-6 sm:p-8 space-y-8 bg-white/10 backdrop-blur-md rounded-xl shadow-lg">
+      <div className="absolute inset-0 bg-black opacity-60"></div>
+      <div className="relative z-10 w-full max-w-md p-6 sm:p-8 space-y-8 bg-white/10 dark:bg-gray-900/30 backdrop-blur-lg rounded-xl shadow-2xl border border-white/10">
         <div className="text-center">
           <h2 className="text-4xl font-extrabold text-white">
             PhotoManager
@@ -46,7 +46,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
                 type="text"
                 autoComplete="username"
                 required
-                className="appearance-none rounded-none relative block w-full px-3 py-3 border border-gray-500 bg-gray-700 text-white placeholder-gray-400 focus:outline-none focus:ring-brand-secondary focus:border-brand-secondary focus:z-10 sm:text-sm rounded-t-md"
+                className="appearance-none rounded-none relative block w-full px-3 py-3 border border-gray-500 bg-gray-700/50 text-white placeholder-gray-400 focus:outline-none focus:ring-brand-secondary focus:border-brand-secondary focus:z-10 sm:text-sm rounded-t-md"
                 placeholder="Username (default: admin)"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
@@ -59,7 +59,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
                 type="password"
                 autoComplete="current-password"
                 required
-                className="appearance-none rounded-none relative block w-full px-3 py-3 border border-gray-500 bg-gray-700 text-white placeholder-gray-400 focus:outline-none focus:ring-brand-secondary focus:border-brand-secondary focus:z-10 sm:text-sm rounded-b-md"
+                className="appearance-none rounded-none relative block w-full px-3 py-3 border border-gray-500 bg-gray-700/50 text-white placeholder-gray-400 focus:outline-none focus:ring-brand-secondary focus:border-brand-secondary focus:z-10 sm:text-sm rounded-b-md"
                 placeholder="Password (default: password)"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -72,7 +72,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
           <div>
             <button
               type="submit"
-              className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-brand-primary hover:bg-brand-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-secondary transition duration-300"
+              className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-brand-primary hover:bg-brand-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-secondary transition-all duration-300 transform hover:scale-105"
             >
               Sign in
             </button>
