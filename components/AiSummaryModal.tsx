@@ -23,7 +23,9 @@ const AiSummaryModal: React.FC<AiSummaryModalProps> = ({ isOpen, onClose, events
   }, [isOpen]);
 
   const generateSummary = async () => {
-    if (Object.keys(events).length === 0) {
+    const hasEvents = Object.keys(events).length > 0;
+    
+    if (!hasEvents) {
       setSummary("You don't have any events scheduled. Add some events to your calendar to get a summary!");
       setIsLoading(false);
       setError('');
@@ -37,61 +39,77 @@ const AiSummaryModal: React.FC<AiSummaryModalProps> = ({ isOpen, onClose, events
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
       
+      // --- Client-Side Pre-processing to reduce payload size ---
+      // Calculating stats locally prevents sending huge JSON blobs over the network
       const today = new Date();
-      const thirtyDaysAgo = new Date(today);
-      thirtyDaysAgo.setDate(today.getDate() - 30);
+      today.setHours(0, 0, 0, 0);
+      
+      let totalPendingAmount = 0;
+      let totalPendingCount = 0;
+      let totalUpcomingCount = 0;
+      let completedCount = 0;
 
-      // Flatten events structure and sanitize data for the prompt
-      // CRITICAL: We create a new object with only the necessary string/number fields.
-      // We explicitly DO NOT pass the `userPhoto` field or the full event object to avoid sending base64 images.
-      const allEvents = Object.entries(events).flatMap(([date, list]) => {
-        const eventDate = new Date(date);
-        // Filter: Include all pending events regardless of date (for accurate pending totals),
-        // and any event (pending or completed) from the last 30 days onwards.
-        // This filters out old completed history to keep payload size manageable.
-        const isRecentOrFuture = eventDate >= thirtyDaysAgo;
+      const allEventsList: { date: Date; details: EventDetailsWithUser }[] = [];
 
-        return (list as EventDetailsWithUser[])
-          .filter(event => event.status === 'pending' || isRecentOrFuture)
-          .map(event => ({ 
-            date,
-            description: event.text,
-            amount: event.amount,
-            venue: event.place,
-            status: event.status,
-            timeSlot: event.timeSlot,
-            customerName: event.customerName,
-            // If admin, include the user name, but never the photo
-            userName: isAdmin ? event.userName : undefined 
-          }));
+      Object.entries(events).forEach(([dateStr, list]) => {
+        const date = new Date(dateStr);
+        (list as EventDetailsWithUser[]).forEach(event => {
+           allEventsList.push({ date, details: event });
+           
+           // Calculate stats
+           if (event.status === 'pending') {
+               totalPendingAmount += event.amount;
+               totalPendingCount++;
+           } else if (event.status === 'completed') {
+               completedCount++;
+           }
+
+           if (date >= today) {
+               totalUpcomingCount++;
+           }
+        });
       });
 
-      // Limit to 200 events to prevent hitting XHR body size limits or token limits
-      // If user has massive amounts of data, we prioritize the most relevant ones (flatmap usually preserves order if dates were sorted, but keys might not be).
-      // Let's sort by date just in case to keep most relevant.
-      allEvents.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      // Get only the next 15 upcoming events for context
+      // This ensures the prompt size remains small
+      const nextEvents = allEventsList
+        .filter(e => e.date >= today)
+        .sort((a, b) => a.date.getTime() - b.date.getTime())
+        .slice(0, 15)
+        .map(e => ({
+            date: e.date.toISOString().split('T')[0],
+            text: e.details.text.length > 50 ? e.details.text.substring(0, 50) + '...' : e.details.text,
+            amount: e.details.amount,
+            status: e.details.status,
+            timeSlot: e.details.timeSlot,
+            customer: e.details.customerName ? 'Yes' : 'No' // Anonymize/Simplify to save tokens
+        }));
 
-      // Take the last 200 items (assuming they are chronological, this keeps recent/future)
-      // Or actually, since we want pending + upcoming, let's just slice.
-      const limitedEvents = allEvents.length > 200 ? allEvents.slice(allEvents.length - 200) : allEvents;
+      // Construct a minimal data object for the AI
+      const summaryData = {
+          stats: {
+              totalEvents: allEventsList.length,
+              completedEvents: completedCount,
+              pendingEvents: totalPendingCount,
+              totalPendingAmount: totalPendingAmount,
+              upcomingEventsCount: totalUpcomingCount
+          },
+          upcomingScheduleSample: nextEvents
+      };
 
       const prompt = `
-        You are a helpful assistant for a photographer using a dashboard to manage their photo shoot orders.
-        Based on the following event data (in JSON format), provide a concise and friendly summary.
+        Act as a personal assistant for a photography business. 
+        Analyze the following JSON data which contains business statistics and a schedule of upcoming shoots.
+        
+        Data:
+        ${JSON.stringify(summaryData)}
 
-        Your summary should highlight:
-        - The total number of upcoming events.
-        - The total amount in pending payments.
-        - The busiest day or period.
-        - Any urgent upcoming tasks.
-        - Conclude with a friendly, encouraging remark.
-
-        IMPORTANT:
-        - Format all monetary values using the Indian Rupee symbol (₹). Do not use the dollar sign ($).
-        - Format the key points as a bulleted list.
-
-        Event data:
-        ${JSON.stringify(limitedEvents, null, 2)}
+        Please provide a brief, encouraging summary (max 4-5 sentences) that covers:
+        1. The financial outlook (specifically the pending amount).
+        2. Workload overview (upcoming events).
+        3. Any immediate upcoming shoots from the schedule sample.
+        
+        Use the Indian Rupee symbol (₹) for money.
       `;
       
       const response = await ai.models.generateContent({
@@ -99,10 +117,17 @@ const AiSummaryModal: React.FC<AiSummaryModalProps> = ({ isOpen, onClose, events
         contents: prompt,
       });
 
-      setSummary(response.text || '');
-    } catch (e) {
+      setSummary(response.text || 'No summary available.');
+    } catch (e: any) {
       console.error('Error generating summary:', e);
-      setError('Sorry, I was unable to generate a summary at this time. Please check your connection and try again.');
+      // Enhanced error handling
+      if (e.toString().includes('400') || e.toString().includes('413') || e.toString().includes('Code 6')) {
+          setError('Data too large to process via AI. Please check your manual statistics.');
+          setSummary("Stats Summary (Offline Mode):\n" + 
+            "The AI service is currently unavailable due to network limits. Please refer to the Dashboard cards for your total pending amounts and upcoming event counts.");
+      } else {
+          setError('Unable to connect to AI service. Please check your internet connection.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -130,8 +155,8 @@ const AiSummaryModal: React.FC<AiSummaryModalProps> = ({ isOpen, onClose, events
             </div>
           )}
           {error && (
-            <div className="text-center text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900/30 p-4 rounded-md">
-              <p className="font-semibold">An Error Occurred</p>
+            <div className="text-center text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900/30 p-4 rounded-md mb-4">
+              <p className="font-semibold">Connection Issue</p>
               <p className="text-sm mt-1">{error}</p>
             </div>
           )}

@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { EventData, EventDetails, User, EventDetailsWithUser, Reminder } from '../types';
 import DashboardCard from '../components/DashboardCard';
 import Calendar from '../components/Calendar';
@@ -13,6 +13,7 @@ import UserManagementPage from './UserManagementPage';
 import AiSummaryModal from '../components/AiSummaryModal';
 import UserModal from '../components/UserModal';
 import { CollectionIcon, CheckCircleIcon, ClockIcon, CurrencyDollarIcon, CreditCardIcon, SparklesIcon } from '../components/icons/Icons';
+import { getAllEvents, saveEventToDb, deleteEventFromDb } from '../services/db';
 
 interface DashboardPageProps {
   currentUser: User;
@@ -31,17 +32,6 @@ const getLocalDateKey = (date: Date): string => {
   return `${year}-${month}-${day}`;
 };
 
-// Type guard to validate event details
-const isValidEventDetails = (details: any): boolean => {
-  return (
-    details &&
-    typeof details === 'object' &&
-    typeof details.text === 'string' &&
-    typeof details.amount === 'number' &&
-    typeof details.place === 'string'
-  );
-};
-
 const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser, users, onLogout, onUpdateUser, onAddUser, onDeleteUser }) => {
   const [events, setEvents] = useState<EventData>({});
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
@@ -54,15 +44,14 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser, users, onLog
   // User Modal State
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
-
+  
   const [view, setView] = useState<'dashboard' | 'details' | 'pending_payments' | 'profile' | 'user_management'>('dashboard');
   const [detailsType, setDetailsType] = useState<string | null>(null);
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [isReminderBannerVisible, setIsReminderBannerVisible] = useState(true);
 
-  // --- Notification Logic Start ---
+  // --- Notification Logic ---
   useEffect(() => {
-    // Request permission on mount if default
     if ('Notification' in window && Notification.permission === 'default') {
       Notification.requestPermission().catch(err => console.error("Notification permission error:", err));
     }
@@ -71,18 +60,13 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser, users, onLog
   const sendNotification = (title: string, body: string) => {
     if ('Notification' in window && Notification.permission === 'granted') {
        try {
-         new Notification(title, {
-           body,
-           icon: '/icon-192.png', 
-         });
+         new Notification(title, { body, icon: '/icon-192.png' });
        } catch (e) {
          console.error("Failed to send notification", e);
        }
     }
   };
 
-  // Check for upcoming events and send notifications
-  // We use a ref to keep track of the interval to clear it properly
   useEffect(() => {
     const checkAndSendNotifications = () => {
         if (Object.keys(events).length === 0) return;
@@ -99,15 +83,12 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser, users, onLog
           { key: tomorrowKey, label: 'Tomorrow' }
         ];
 
-        // Use sessionStorage to track sent notifications for this session to avoid spam
         let notifiedEvents: string[] = [];
         try {
              const stored = sessionStorage.getItem('notifiedEvents');
              notifiedEvents = stored ? JSON.parse(stored) : [];
              if (!Array.isArray(notifiedEvents)) notifiedEvents = [];
-        } catch (e) {
-            notifiedEvents = [];
-        }
+        } catch (e) { notifiedEvents = []; }
 
         const newNotifiedEvents = [...notifiedEvents];
         let hasNewNotifications = false;
@@ -116,16 +97,11 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser, users, onLog
           const dayEvents = events[key] as EventDetailsWithUser[] || [];
           dayEvents.forEach(event => {
             if (event.status !== 'completed') {
-              // Create a unique ID for the notification
               const uniqueId = `${key}-${event.timeSlot}-${event.text}`;
-              
               if (!notifiedEvents.includes(uniqueId)) {
                  const title = `Upcoming Event: ${event.text} (${label})`;
-                 // Format: Customer Name, Event Name (Title), Event Place, Session
-                 const body = `Customer: ${event.customerName || 'N/A'}\nPlace: ${event.place}\nSession: ${event.timeSlot}\nContact: ${event.customerMobile || 'N/A'}`;
-                 
+                 const body = `Customer: ${event.customerName || 'N/A'}\nPlace: ${event.place}\nSession: ${event.timeSlot}`;
                  sendNotification(title, body);
-                 
                  newNotifiedEvents.push(uniqueId);
                  hasNewNotifications = true;
               }
@@ -137,132 +113,78 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser, users, onLog
           sessionStorage.setItem('notifiedEvents', JSON.stringify(newNotifiedEvents));
         }
     };
-
-    // Check immediately
+    
     checkAndSendNotifications();
-
-    // Check periodically (every 1 hour) to ensure notifications trigger if the app is left open
     const intervalId = setInterval(checkAndSendNotifications, 60 * 60 * 1000);
-
     return () => clearInterval(intervalId);
   }, [events]);
-  // --- Notification Logic End ---
 
-  const checkAndSetReminders = (allEvents: EventData) => {
+  // --- Load Data from DB ---
+  useEffect(() => {
+    const loadEvents = async () => {
+        try {
+             // We pass 'users' so the service can join user data properly
+             const allEvents = await getAllEvents(users);
+             
+             // Filter for non-admin users if needed
+             if (currentUser.role !== 'admin') {
+                 const filteredData: EventData = {};
+                 Object.entries(allEvents).forEach(([date, list]) => {
+                     const userEvents = list.filter(e => e.userId === currentUser.id);
+                     if (userEvents.length > 0) filteredData[date] = userEvents;
+                 });
+                 setEvents(filteredData);
+             } else {
+                 setEvents(allEvents);
+             }
+        } catch (e) {
+            console.error("Failed to load events", e);
+        }
+    };
+
+    if (users.length > 0) {
+        loadEvents();
+    }
+    
+    const reminderDismissed = sessionStorage.getItem('reminderDismissed');
+    if (reminderDismissed === 'true') setIsReminderBannerVisible(false);
+}, [currentUser, users]); // Reload if users change to ensure names are up to date
+
+  // --- Reminders Update ---
+  useEffect(() => {
     const newReminders: Reminder[] = [];
     const today = new Date();
     const tomorrow = new Date();
     tomorrow.setDate(today.getDate() + 1);
-
     const todayDateKey = getLocalDateKey(today);
     const tomorrowDateKey = getLocalDateKey(tomorrow);
 
-    const eventsForToday = allEvents[todayDateKey] || [];
-    eventsForToday.forEach((event: any) => {
-        if (event.status !== 'completed') {
-            newReminders.push({ type: 'Today', details: event });
-        }
+    (events[todayDateKey] || []).forEach((event: any) => {
+        if (event.status !== 'completed') newReminders.push({ type: 'Today', details: event });
     });
     
-    const eventsForTomorrow = allEvents[tomorrowDateKey] || [];
-    eventsForTomorrow.forEach((event: any) => {
-        if (event.status !== 'completed') {
-            newReminders.push({ type: 'Tomorrow', details: event });
-        }
+    (events[tomorrowDateKey] || []).forEach((event: any) => {
+        if (event.status !== 'completed') newReminders.push({ type: 'Tomorrow', details: event });
     });
-
     setReminders(newReminders);
-  };
-  
-  // Effect to keep reminders in sync whenever events change
-  useEffect(() => {
-      checkAndSetReminders(events);
   }, [events]);
 
-  useEffect(() => {
-    const loadEvents = () => {
-        let allEvents: EventData = {};
-        
-        const processEvents = (user: User) => {
-            try {
-                const storedUserEvents = localStorage.getItem(`calendarEvents_${user.id}`);
-                if (storedUserEvents) {
-                    const parsedData = JSON.parse(storedUserEvents);
-                    if (parsedData && typeof parsedData === 'object') {
-                        Object.entries(parsedData).forEach(([dateKey, data]) => {
-                            // Handle legacy data (single object) vs new data (array)
-                            const eventList = (Array.isArray(data) ? data : [data]) as any[];
-                            
-                            const validEvents = eventList
-                                .filter(isValidEventDetails)
-                                .map((details: any) => ({
-                                    ...details,
-                                    userId: user.id,
-                                    userName: user.name,
-                                    userPhoto: user.photo,
-                                    // Migration: Default to Full Day if undefined
-                                    timeSlot: details.timeSlot || 'Full Day'
-                                }));
-
-                            if (validEvents.length > 0) {
-                                if (!allEvents[dateKey]) {
-                                    allEvents[dateKey] = [];
-                                }
-                                allEvents[dateKey] = [...allEvents[dateKey], ...validEvents];
-                            }
-                        });
-                    }
-                }
-            } catch (error) {
-                console.error(`Failed to parse events for user ${user.id}`, error);
-            }
-        };
-
-        if (currentUser.role === 'admin') {
-            users.forEach(processEvents);
-        } else {
-            processEvents(currentUser);
-        }
-        
-        setEvents(allEvents);
-    };
-
-    loadEvents();
-    
-    const reminderDismissed = sessionStorage.getItem('reminderDismissed');
-    if (reminderDismissed === 'true') {
-        setIsReminderBannerVisible(false);
-    }
-}, [currentUser, users]);
 
   const filteredEvents: EventData = useMemo(() => {
     const filtered: EventData = {};
-
     Object.entries(events).forEach(([date, eventList]) => {
-        // Explicitly cast eventList to avoid 'unknown' type error
-        const list = eventList as EventDetailsWithUser[];
-        let matchingEvents = list;
-
-        // Apply Status Filter
+        let matchingEvents = eventList as EventDetailsWithUser[];
         if (filterStatus !== 'all') {
             matchingEvents = matchingEvents.filter(event => event.status === filterStatus);
         }
-
-        if (matchingEvents.length > 0) {
-            filtered[date] = matchingEvents;
-        }
+        if (matchingEvents.length > 0) filtered[date] = matchingEvents;
     });
-
     return filtered;
   }, [events, filterStatus]);
 
-  const highlightedDatesForCalendar = useMemo(() => {
-    return new Set(Object.keys(filteredEvents));
-  }, [filteredEvents]);
+  const highlightedDatesForCalendar = useMemo(() => new Set(Object.keys(filteredEvents)), [filteredEvents]);
 
-  const handleNavigate = (newView: 'dashboard' | 'profile' | 'user_management') => {
-    setView(newView);
-  };
+  const handleNavigate = (newView: 'dashboard' | 'profile' | 'user_management') => setView(newView);
 
   const handleDateSelect = (date: Date) => {
     setSelectedDate(date);
@@ -274,39 +196,24 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser, users, onLog
     setSelectedDate(null);
   };
 
-  const handleSaveEvent = (newEvent: EventDetails, targetUserId: string, originalTimeSlot?: string) => {
+  const handleSaveEvent = async (newEvent: EventDetails, targetUserId: string, originalTimeSlot?: string) => {
     if (selectedDate) {
       const dateKey = getLocalDateKey(selectedDate);
-      
       const targetUser = users.find(u => u.id === targetUserId);
-      if (!targetUser) {
-        console.error("Target user not found.");
-        closeModal();
-        return;
-      }
+      if (!targetUser) return;
 
-      // Fetch current events for this user/date from local storage to ensure sync
-      let userEventsMap: any = {};
-      try {
-          const stored = localStorage.getItem(`calendarEvents_${targetUserId}`);
-          if (stored) userEventsMap = JSON.parse(stored);
-      } catch(e) { console.error(e); }
+      const currentDayEvents = events[dateKey] || [];
+      // Filter out the event being edited if needed for validation checks
+      const otherEvents = newEvent.id 
+        ? currentDayEvents.filter(e => e.id !== newEvent.id) 
+        : currentDayEvents;
 
-      let currentDayEvents: EventDetails[] = Array.isArray(userEventsMap[dateKey]) 
-          ? userEventsMap[dateKey] 
-          : (userEventsMap[dateKey] ? [userEventsMap[dateKey]] : []); // Handle legacy
+      // Business Logic
+      const hasFullDay = otherEvents.some(e => e.timeSlot === 'Full Day');
+      const hasMorning = otherEvents.some(e => e.timeSlot === 'Morning');
+      const hasEvening = otherEvents.some(e => e.timeSlot === 'Evening');
 
-      // If editing, remove the original event first
-      if (originalTimeSlot) {
-          currentDayEvents = currentDayEvents.filter(e => e.timeSlot !== originalTimeSlot);
-      }
-
-      // Business Logic Validation
-      const hasFullDay = currentDayEvents.some(e => e.timeSlot === 'Full Day');
-      const hasMorning = currentDayEvents.some(e => e.timeSlot === 'Morning');
-      const hasEvening = currentDayEvents.some(e => e.timeSlot === 'Evening');
-
-      if (newEvent.timeSlot === 'Full Day' && currentDayEvents.length > 0) {
+      if (newEvent.timeSlot === 'Full Day' && otherEvents.length > 0) {
           alert("Cannot add Full Day event: Other events already exist for this date.");
           return;
       }
@@ -323,70 +230,75 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser, users, onLog
           return;
       }
 
-      // Add new event
-      currentDayEvents.push(newEvent);
+      try {
+          // Save to DB
+          const savedId = await saveEventToDb(newEvent, dateKey, targetUserId);
+          
+          // Update Local State
+          const eventWithUser: EventDetailsWithUser = {
+              ...newEvent,
+              id: savedId,
+              date: dateKey,
+              userId: targetUserId,
+              userName: targetUser.name,
+              userPhoto: targetUser.photo
+          };
 
-      // Save to LocalStorage
-      userEventsMap[dateKey] = currentDayEvents;
-      localStorage.setItem(`calendarEvents_${targetUserId}`, JSON.stringify(userEventsMap));
-
-      // Update State
-      const newGlobalEvents = currentDayEvents.map(d => ({
-          ...d,
-          userId: targetUserId,
-          userName: targetUser.name,
-          userPhoto: targetUser.photo
-      }));
-
-      setEvents(prevEvents => {
-          const nextEvents = { ...prevEvents };
-          if (currentUser.role === 'admin') {
-             const existing = prevEvents[dateKey] || [];
-             const others = existing.filter(e => (e as any).userId !== targetUserId);
-             nextEvents[dateKey] = [...others, ...newGlobalEvents] as any;
-          } else {
-             nextEvents[dateKey] = newGlobalEvents as any;
-          }
-          return nextEvents;
-      });
-      
-      closeModal();
+          setEvents(prev => {
+              const next = { ...prev };
+              const existing = next[dateKey] || [];
+              // Remove old version if editing
+              const clean = newEvent.id ? existing.filter(e => e.id !== newEvent.id) : existing;
+              next[dateKey] = [...clean, eventWithUser];
+              return next;
+          });
+          closeModal();
+      } catch (e) {
+          console.error("Failed to save event", e);
+          alert("Failed to save event to database.");
+      }
     }
   };
 
-  const handleDeleteEvent = (eventToDelete: EventDetailsWithUser) => {
-    if (selectedDate) {
-      const dateKey = getLocalDateKey(selectedDate);
-      const targetUserId = eventToDelete.userId;
-
+  const handleDeleteEvent = async (eventToDelete: EventDetailsWithUser) => {
+    if (selectedDate && eventToDelete.id) {
       try {
-          const stored = localStorage.getItem(`calendarEvents_${targetUserId}`);
-          const userEventsMap = stored ? JSON.parse(stored) : {};
-          let dayEvents = Array.isArray(userEventsMap[dateKey]) ? userEventsMap[dateKey] : [userEventsMap[dateKey]];
+          await deleteEventFromDb(eventToDelete.id);
           
-          // Filter out the specific event based on timeSlot
-          dayEvents = dayEvents.filter((e: EventDetails) => e.timeSlot !== eventToDelete.timeSlot);
-
-          if (dayEvents.length === 0) {
-              delete userEventsMap[dateKey];
-          } else {
-              userEventsMap[dateKey] = dayEvents;
-          }
-          localStorage.setItem(`calendarEvents_${targetUserId}`, JSON.stringify(userEventsMap));
+          const dateKey = getLocalDateKey(selectedDate);
+          setEvents(prev => {
+              const next = { ...prev };
+              const existing = next[dateKey] || [];
+              next[dateKey] = existing.filter(e => e.id !== eventToDelete.id);
+              if (next[dateKey].length === 0) delete next[dateKey];
+              return next;
+          });
       } catch (e) {
-          console.error("Could not delete event", e);
+          console.error("Delete failed", e);
+          alert("Failed to delete event from database.");
       }
+    }
+  };
 
-      // Update State
-      const updatedEvents = { ...events };
-      const dayList = (updatedEvents[dateKey] || []) as EventDetailsWithUser[];
-      updatedEvents[dateKey] = dayList.filter(e => 
-          !(e.userId === targetUserId && e.timeSlot === eventToDelete.timeSlot)
-      );
+  const handleSettlePayment = async (dateKey: string, eventIndex: number) => {
+    const dayEvents = events[dateKey] as EventDetailsWithUser[];
+    if (!dayEvents || !dayEvents[eventIndex]) return;
+    
+    const eventToSettle = dayEvents[eventIndex];
+    const updatedEvent = { ...eventToSettle, status: 'completed' } as EventDetailsWithUser;
 
-      if (updatedEvents[dateKey].length === 0) delete updatedEvents[dateKey];
-
-      setEvents(updatedEvents);
+    try {
+        await saveEventToDb(updatedEvent, dateKey, eventToSettle.userId);
+        
+        setEvents(prev => {
+            const next = { ...prev };
+            if (next[dateKey]) {
+                next[dateKey] = next[dateKey].map(e => e.id === eventToSettle.id ? updatedEvent : e);
+            }
+            return next;
+        });
+    } catch (e) {
+        alert("Failed to update payment status.");
     }
   };
 
@@ -405,46 +317,6 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser, users, onLog
     setDetailsType(null);
   };
   
-  const handleSettlePayment = (dateKey: string, eventIndex: number) => {
-    // Find the specific event to settle
-    const dayEvents = events[dateKey] as EventDetailsWithUser[];
-    if (!dayEvents || !dayEvents[eventIndex]) return;
-    
-    const eventToSettle = dayEvents[eventIndex];
-    const targetUserId = eventToSettle.userId;
-
-    // Update localStorage
-    try {
-        const stored = localStorage.getItem(`calendarEvents_${targetUserId}`);
-        const userEventsMap = stored ? JSON.parse(stored) : {};
-        let localDayEvents = Array.isArray(userEventsMap[dateKey]) ? userEventsMap[dateKey] : [userEventsMap[dateKey]];
-        
-        // Find matching event in local storage to update
-        localDayEvents = localDayEvents.map((e: EventDetails) => {
-            if (e.timeSlot === eventToSettle.timeSlot) {
-                return { ...e, status: 'completed' };
-            }
-            return e;
-        });
-        
-        userEventsMap[dateKey] = localDayEvents;
-        localStorage.setItem(`calendarEvents_${targetUserId}`, JSON.stringify(userEventsMap));
-    } catch (e) {
-        console.error("Could not settle payment in localStorage", e);
-    }
-    
-    // Update State
-    setEvents(prevEvents => {
-      const updatedEvents = { ...prevEvents };
-      if (updatedEvents[dateKey]) {
-         updatedEvents[dateKey] = (updatedEvents[dateKey] as any[]).map((e, idx) => 
-             idx === eventIndex ? { ...e, status: 'completed' } : e
-         );
-      }
-      return updatedEvents;
-    });
-  };
-
   const handleDismissReminders = () => {
     setIsReminderBannerVisible(false);
     sessionStorage.setItem('reminderDismissed', 'true');
@@ -456,17 +328,13 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser, users, onLog
   };
 
   const handleSaveUserFromModal = (user: User) => {
-    if (editingUser) {
-        onUpdateUser(user);
-    } else {
-        onAddUser(user);
-    }
+    if (editingUser) onUpdateUser(user);
+    else onAddUser(user);
   };
 
+  // --- Stats Calculation ---
   const statsData = useMemo(() => {
-    // Use filteredEvents to calculate stats based on current view filters
     const viewEventsFlat = Object.values(filteredEvents).flat() as EventDetailsWithUser[];
-    
     const totalOrders = viewEventsFlat.length;
     const completedOrders = viewEventsFlat.filter(e => e.status === 'completed').length;
     const pendingOrders = totalOrders - completedOrders;
@@ -488,31 +356,21 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser, users, onLog
     { key: 'pending_amount', title: 'Amount Pending', value: `₹${statsData.amountPending.toLocaleString('en-IN')}`, icon: <CreditCardIcon className="w-8 h-8 text-orange-500" /> },
   ];
 
+  // --- Details Data Preparation ---
   const getDetailsData = () => {
-    // Flatten events with date info
     const allEvents = Object.entries(filteredEvents)
       .flatMap(([date, list]) => (list as EventDetailsWithUser[]).map(details => ({ date, details })))
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-    const currentStat = stats.find(s => s.key === detailsType);
-    const title = currentStat ? currentStat.title : 'Details';
-
     let filteredEventsList = allEvents;
-
-    switch (detailsType) {
-      case 'completed':
-      case 'received':
+    if (detailsType === 'completed' || detailsType === 'received') {
         filteredEventsList = allEvents.filter(e => e.details.status === 'completed');
-        break;
-      case 'pending':
-      case 'pending_amount':
+    } else if (detailsType === 'pending' || detailsType === 'pending_amount') {
         filteredEventsList = allEvents.filter(e => e.details.status === 'pending');
-        break;
-      case 'total':
-      default:
-        break;
     }
-    return { title, events: filteredEventsList };
+    
+    const currentStat = stats.find(s => s.key === detailsType);
+    return { title: currentStat ? currentStat.title : 'Details', events: filteredEventsList };
   };
   
   const detailsData = view === 'details' ? getDetailsData() : { title: '', events: [] };
@@ -592,31 +450,14 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser, users, onLog
                 <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200">Event Calendar</h2>
                 
                 <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
-                    {/* Filter Tabs */}
                     <div className="flex bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
-                        <button
-                            onClick={() => setFilterStatus('all')}
-                            className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${filterStatus === 'all' ? 'bg-white dark:bg-gray-600 text-brand-primary shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
-                        >
-                            All
-                        </button>
-                        <button
-                            onClick={() => setFilterStatus('pending')}
-                            className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${filterStatus === 'pending' ? 'bg-blue-500 text-white shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
-                        >
-                            Upcoming
-                        </button>
-                        <button
-                            onClick={() => setFilterStatus('completed')}
-                            className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${filterStatus === 'completed' ? 'bg-gray-500 text-white shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
-                        >
-                            Completed
-                        </button>
+                        <button onClick={() => setFilterStatus('all')} className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${filterStatus === 'all' ? 'bg-white dark:bg-gray-600 text-brand-primary shadow-sm' : 'text-gray-500 dark:text-gray-400'}`}>All</button>
+                        <button onClick={() => setFilterStatus('pending')} className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${filterStatus === 'pending' ? 'bg-blue-500 text-white shadow-sm' : 'text-gray-500 dark:text-gray-400'}`}>Upcoming</button>
+                        <button onClick={() => setFilterStatus('completed')} className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${filterStatus === 'completed' ? 'bg-gray-500 text-white shadow-sm' : 'text-gray-500 dark:text-gray-400'}`}>Completed</button>
                     </div>
-
                     <button
                         onClick={() => setIsAiModalOpen(true)}
-                        className="flex items-center justify-center px-4 py-2 bg-gradient-to-r from-brand-primary to-brand-secondary text-white font-semibold rounded-lg shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-primary dark:focus:ring-offset-gray-800 transition-all duration-300 transform hover:scale-105 text-sm"
+                        className="flex items-center justify-center px-4 py-2 bg-gradient-to-r from-brand-primary to-brand-secondary text-white font-semibold rounded-lg shadow-md hover:shadow-lg transition-all duration-300 transform hover:scale-105 text-sm"
                     >
                         <SparklesIcon className="w-4 h-4 mr-2" />
                         AI Summary
@@ -636,19 +477,11 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser, users, onLog
 
   return (
     <div className="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 h-screen flex flex-col">
-      <Header 
-        currentUser={currentUser} 
-        onLogout={onLogout} 
-        onNavigate={handleNavigate} 
-      />
+      <Header currentUser={currentUser} onLogout={onLogout} onNavigate={handleNavigate} />
       
       <main className="flex-1 overflow-y-auto p-4 sm:p-6 flex flex-col">
-        <div className="flex-grow">
-            {renderContent()}
-        </div>
-        <footer className="mt-8 py-4 text-center text-xs text-gray-500 dark:text-gray-400">
-            © 2025 Ajay Rohan M. All Rights Reserved.
-        </footer>
+        <div className="flex-grow">{renderContent()}</div>
+        <footer className="mt-8 py-4 text-center text-xs text-gray-500 dark:text-gray-400">© 2025 Ajay Rohan M. All Rights Reserved.</footer>
       </main>
 
       {isModalOpen && selectedDate && (
@@ -656,8 +489,6 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser, users, onLog
           isOpen={isModalOpen}
           onClose={closeModal}
           date={selectedDate}
-          // Pass ALL events for this date to ensure collision detection works properly
-          // even if they are hidden by the current filter.
           events={(events[getLocalDateKey(selectedDate)] || []) as EventDetailsWithUser[]}
           onSave={handleSaveEvent}
           onDelete={handleDeleteEvent}
@@ -666,20 +497,8 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser, users, onLog
         />
       )}
 
-      <UserModal
-        isOpen={isUserModalOpen}
-        onClose={() => setIsUserModalOpen(false)}
-        onSave={handleSaveUserFromModal}
-        userToEdit={editingUser}
-        isAdmin={currentUser.role === 'admin'}
-      />
-
-      <AiSummaryModal
-        isOpen={isAiModalOpen}
-        onClose={() => setIsAiModalOpen(false)}
-        events={filteredEvents}
-        isAdmin={currentUser.role === 'admin'}
-      />
+      <UserModal isOpen={isUserModalOpen} onClose={() => setIsUserModalOpen(false)} onSave={handleSaveUserFromModal} userToEdit={editingUser} isAdmin={currentUser.role === 'admin'} />
+      <AiSummaryModal isOpen={isAiModalOpen} onClose={() => setIsAiModalOpen(false)} events={filteredEvents} isAdmin={currentUser.role === 'admin'} />
     </div>
   );
 };

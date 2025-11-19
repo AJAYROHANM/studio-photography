@@ -3,81 +3,91 @@ import React, { useState, useEffect } from 'react';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import { User } from './types';
+import { getUsers, saveUser, deleteUserFromDb } from './services/db';
+import { auth } from './lib/firebase';
 
 const App: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  // Initialize users and check for logged in session
+  // Initialize users from DB
   useEffect(() => {
-    let storedUsers: User[] = [];
-    try {
-      const usersJson = localStorage.getItem('appUsers');
-      const parsedUsers = usersJson ? JSON.parse(usersJson) : [];
-      if (Array.isArray(parsedUsers)) {
-          // FIX: Add a more robust filter to ensure every user object is valid,
-          // preventing crashes from corrupted localStorage data.
-          storedUsers = parsedUsers.filter(
-            (user): user is User => 
-              user && 
-              typeof user === 'object' &&
-              !Array.isArray(user) &&
-              typeof user.id === 'string' && 
-              typeof user.username === 'string' &&
-              typeof user.name === 'string' &&
-              typeof user.phone === 'string' &&
-              typeof user.photo === 'string' &&
-              (user.role === 'admin' || user.role === 'user')
-          );
-      }
-    } catch (e) {
-      console.error("Failed to parse users from localStorage", e);
-      storedUsers = [];
-    }
+    let isMounted = true;
+    let authTimeout: ReturnType<typeof setTimeout>;
 
-    // Enforce the new admin password "Rohan@1721" for the default admin account
-    const adminIndex = storedUsers.findIndex(u => u.username === 'admin');
-    if (adminIndex !== -1) {
-        // Update existing admin password
-        storedUsers[adminIndex].password = 'Rohan@1721';
-    }
+    const initData = async (firebaseUser: any) => {
+        try {
+            // Fetch users from Firebase. Firestore persistence handles offline scenarios.
+            let fetchedUsers = await getUsers();
+            
+            // Seed Default Admin if List is empty (First run ever)
+            if (fetchedUsers.length === 0) {
+                console.log("No users found. Seeding default admin.");
+                const adminUser: User = {
+                    id: `user-${Date.now()}`,
+                    username: 'admin',
+                    password: 'Rohan@1721',
+                    role: 'admin',
+                    name: 'Admin User',
+                    phone: '123-456-7890',
+                    photo: `https://i.pravatar.cc/150?u=admin`,
+                };
+                await saveUser(adminUser);
+                fetchedUsers = [adminUser];
+            } else {
+                 // Enforce the new admin password "Rohan@1721" for the default admin account in state
+                 const adminIndex = fetchedUsers.findIndex(u => u.username === 'admin');
+                 if (adminIndex !== -1) {
+                     fetchedUsers[adminIndex].password = 'Rohan@1721';
+                 }
+            }
 
-    if (storedUsers.length === 0) {
-      // Create a default admin user if no users exist
-      const adminUser: User = {
-        id: `user-${Date.now()}`,
-        username: 'admin',
-        password: 'Rohan@1721',
-        role: 'admin',
-        name: 'Admin User',
-        phone: '123-456-7890',
-        photo: `https://i.pravatar.cc/150?u=admin`,
-      };
-      storedUsers.push(adminUser);
-    }
-    setUsers(storedUsers);
+            if (isMounted) {
+                setUsers(fetchedUsers);
 
-    // Check for a logged in user session
-    const currentUserId = localStorage.getItem('currentUserId');
-    if (currentUserId) {
-      const user = storedUsers.find(u => u.id === currentUserId);
-      if (user) {
-        // Omitting password from the state for security
-        const { password, ...userWithoutPassword } = user;
-        setCurrentUser(userWithoutPassword);
-      }
+                // Check for a logged in user session (app level session)
+                const currentUserId = localStorage.getItem('currentUserId');
+                if (currentUserId) {
+                    const user = fetchedUsers.find(u => u.id === currentUserId);
+                    if (user) {
+                        const { password, ...userWithoutPassword } = user;
+                        setCurrentUser(userWithoutPassword);
+                    }
+                }
+            }
+        } catch (e) {
+            console.error("App initialization error:", e);
+        } finally {
+            if (isMounted) setIsLoading(false);
+        }
+    };
+
+    // If Auth is available, wait for it.
+    if (auth) {
+        // Timeout to prevent infinite loading if Auth hangs
+        authTimeout = setTimeout(() => {
+             if (isLoading && isMounted) {
+                 console.warn("Auth timed out, attempting load.");
+                 initData(null);
+             }
+        }, 2500);
+
+        const unsubscribe = auth.onAuthStateChanged((user: any) => {
+            clearTimeout(authTimeout);
+            initData(user);
+        });
+        return () => {
+            unsubscribe();
+            clearTimeout(authTimeout);
+            isMounted = false;
+        };
+    } else {
+        // Fallback if Firebase auth completely failed to load
+        initData(null);
+        return () => { isMounted = false; };
     }
-    
-    setIsLoading(false);
   }, []);
-
-  // Persist users to localStorage whenever they change
-  useEffect(() => {
-    if (!isLoading) {
-      localStorage.setItem('appUsers', JSON.stringify(users));
-    }
-  }, [users, isLoading]);
 
   const handleLogin = (username: string, passwordAttempt: string): boolean => {
     const user = users.find(u => u.username === username && u.password === passwordAttempt);
@@ -95,35 +105,24 @@ const App: React.FC = () => {
     localStorage.removeItem('currentUserId');
   };
 
-  const handleUpdateUser = (updatedUser: User) => {
-    let userWithPassword = { ...updatedUser };
-    const existingUser = users.find(u => u.id === updatedUser.id);
-
-    if (updatedUser.password) {
-        // new password provided
-    } else if (existingUser) {
-        // keep old password if not changed
-        userWithPassword.password = existingUser.password;
-    }
-
-    let updatedUsersList: User[] = [];
-    setUsers(prevUsers => {
-      updatedUsersList = prevUsers.map(u => u.id === userWithPassword.id ? userWithPassword : u);
-      return updatedUsersList;
-    });
-
-    if (currentUser && currentUser.id === userWithPassword.id) {
-        const { password, ...userWithoutPassword } = userWithPassword;
+  const handleUpdateUser = async (updatedUser: User) => {
+    // Optimistic Update
+    setUsers(prevUsers => prevUsers.map(u => u.id === updatedUser.id ? updatedUser : u));
+    if (currentUser && currentUser.id === updatedUser.id) {
+        const { password, ...userWithoutPassword } = updatedUser;
         setCurrentUser(userWithoutPassword);
     }
+    await saveUser(updatedUser);
   };
 
-  const handleAddUser = (newUser: User) => {
+  const handleAddUser = async (newUser: User) => {
     setUsers(prevUsers => [...prevUsers, newUser]);
+    await saveUser(newUser);
   };
   
-  const handleDeleteUser = (userId: string) => {
+  const handleDeleteUser = async (userId: string) => {
     setUsers(prevUsers => prevUsers.filter(u => u.id !== userId));
+    await deleteUserFromDb(userId);
   };
   
   if (isLoading) {
