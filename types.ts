@@ -1,9 +1,13 @@
+
 export interface EventDetails {
   text: string;
   sendSms: boolean;
   amount: number;
   place: string;
   status: 'pending' | 'completed';
+  customerName?: string;
+  customerMobile?: string;
+  timeSlot: 'Morning' | 'Evening' | 'Full Day';
 }
 
 export interface EventDetailsWithUser extends EventDetails {
@@ -13,7 +17,7 @@ export interface EventDetailsWithUser extends EventDetails {
 }
 
 export interface EventData {
-  [dateKey: string]: EventDetailsWithUser;
+  [dateKey: string]: EventDetailsWithUser[];
 }
 
 export interface User {

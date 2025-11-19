@@ -9,10 +9,9 @@ interface AiSummaryModalProps {
   onClose: () => void;
   events: EventData;
   isAdmin: boolean;
-  searchQuery?: string;
 }
 
-const AiSummaryModal: React.FC<AiSummaryModalProps> = ({ isOpen, onClose, events, isAdmin, searchQuery }) => {
+const AiSummaryModal: React.FC<AiSummaryModalProps> = ({ isOpen, onClose, events, isAdmin }) => {
   const [summary, setSummary] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
@@ -25,10 +24,7 @@ const AiSummaryModal: React.FC<AiSummaryModalProps> = ({ isOpen, onClose, events
 
   const generateSummary = async () => {
     if (Object.keys(events).length === 0) {
-      const message = searchQuery 
-        ? `No events found matching your search for "${searchQuery}". Try a different search term!`
-        : "You don't have any events scheduled. Add some events to your calendar to get a summary!";
-      setSummary(message);
+      setSummary("You don't have any events scheduled. Add some events to your calendar to get a summary!");
       setIsLoading(false);
       setError('');
       return;
@@ -41,27 +37,40 @@ const AiSummaryModal: React.FC<AiSummaryModalProps> = ({ isOpen, onClose, events
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
       
-      const eventValues = Object.values(events);
-      // FIX: Explicitly type 'e' as EventDetailsWithUser to fix type inference issue.
-      const isMultiUser = isAdmin && eventValues.length > 1 && new Set(eventValues.map((e: EventDetailsWithUser) => e.userId)).size > 1;
+      // Flatten events structure and sanitize data for the prompt
+      // CRITICAL: We create a new object with only the necessary string/number fields.
+      // We explicitly DO NOT pass the `userPhoto` field or the full event object to avoid sending base64 images.
+      const allEvents = Object.entries(events).flatMap(([date, list]) => 
+        (list as EventDetailsWithUser[]).map(event => ({ 
+            date,
+            description: event.text,
+            amount: event.amount,
+            venue: event.place,
+            status: event.status,
+            timeSlot: event.timeSlot,
+            customerName: event.customerName,
+            // If admin, include the user name, but never the photo
+            userName: isAdmin ? event.userName : undefined 
+        }))
+      );
 
       const prompt = `
         You are a helpful assistant for a photographer using a dashboard to manage their photo shoot orders.
         Based on the following event data (in JSON format), provide a concise and friendly summary.
-        The data shows events keyed by date (YYYY-MM-DD). Each event has a description ('text'), a venue ('place'), a payment amount ('amount'), a payment status ('pending' or 'completed'), and user details ('userId', 'userName', 'userPhoto').
-        ${searchQuery ? `The user has filtered the data with the search term: "${searchQuery}". Your summary MUST be based ONLY on the provided filtered data.` : ''}
 
         Your summary should highlight:
         - The total number of upcoming events.
         - The total amount in pending payments.
-        - The busiest day or period based on the schedule.
-        ${isMultiUser ? "- Insights about user activity, such as who has the most pending payments or upcoming events." : ""}
+        - The busiest day or period.
+        - Any urgent upcoming tasks.
         - Conclude with a friendly, encouraging remark.
 
-        Format the key points as a bulleted list.
+        IMPORTANT:
+        - Format all monetary values using the Indian Rupee symbol (₹). Do not use the dollar sign ($).
+        - Format the key points as a bulleted list.
 
         Event data:
-        ${JSON.stringify(events, null, 2)}
+        ${JSON.stringify(allEvents, null, 2)}
       `;
       
       const response = await ai.models.generateContent({
@@ -69,10 +78,10 @@ const AiSummaryModal: React.FC<AiSummaryModalProps> = ({ isOpen, onClose, events
         contents: prompt,
       });
 
-      setSummary(response.text);
+      setSummary(response.text || '');
     } catch (e) {
       console.error('Error generating summary:', e);
-      setError('Sorry, I was unable to generate a summary at this time. Please check your API key and try again.');
+      setError('Sorry, I was unable to generate a summary at this time. Please check your connection and try again.');
     } finally {
       setIsLoading(false);
     }
@@ -92,7 +101,7 @@ const AiSummaryModal: React.FC<AiSummaryModalProps> = ({ isOpen, onClose, events
           <h2 className="text-xl font-bold text-gray-800 dark:text-white">AI-Powered Summary</h2>
         </div>
         
-        <div className="min-h-[150px] max-h-[60vh] overflow-y-auto pr-2">
+        <div className="min-h-[150px] max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
           {isLoading && (
             <div className="flex flex-col items-center justify-center h-full text-center py-8">
               <div className="w-12 h-12 border-4 border-dashed rounded-full animate-spin border-brand-primary"></div>
@@ -106,7 +115,7 @@ const AiSummaryModal: React.FC<AiSummaryModalProps> = ({ isOpen, onClose, events
             </div>
           )}
           {summary && !isLoading && (
-            <div className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+            <div className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap prose dark:prose-invert max-w-none text-sm leading-relaxed">
               {summary}
             </div>
           )}
@@ -129,6 +138,16 @@ const AiSummaryModal: React.FC<AiSummaryModalProps> = ({ isOpen, onClose, events
           }
           .animate-fade-in-up {
             animation: fade-in-up 0.3s ease-out forwards;
+          }
+          .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+          }
+          .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+          }
+          .custom-scrollbar::-webkit-scrollbar-thumb {
+            background-color: rgba(156, 163, 175, 0.5);
+            border-radius: 20px;
           }
         `}</style>
     </div>

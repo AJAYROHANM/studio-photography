@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { EventDetailsWithUser } from '../types';
 import { 
@@ -6,13 +7,16 @@ import {
   ClockIcon, 
   CurrencyDollarIcon, 
   CalendarIcon, 
-  LocationMarkerIcon 
+  LocationMarkerIcon,
+  UserCircleIcon,
+  PhoneIcon
 } from '../components/icons/Icons';
 import ConfirmationModal from '../components/ConfirmationModal';
 
-interface EventWithDate {
+interface EventWithDateAndIndex {
   date: string;
   details: EventDetailsWithUser;
+  index: number; // Required to identify which event in the array to settle
 }
 
 interface EventCardProps {
@@ -36,15 +40,42 @@ const EventCard: React.FC<EventCardProps> = ({ date, details, onSettle, isAdmin 
     : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300';
   const statusIconColor = details.status === 'completed' ? 'text-green-500' : 'text-yellow-500';
 
+  const slotColor = details.timeSlot === 'Morning' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' : 
+                    details.timeSlot === 'Evening' ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200' :
+                    'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200';
+
   return (
     <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md transition-shadow hover:shadow-xl">
       <div className="flex justify-between items-start flex-wrap gap-2">
-        <div>
-          <p className="text-sm text-gray-500 dark:text-gray-400 flex items-center">
-            <CalendarIcon className="w-4 h-4 mr-2 flex-shrink-0" />
-            {formattedDate}
-          </p>
+        <div className="w-full sm:w-auto">
+          <div className="flex items-center space-x-2 mb-1">
+              <p className="text-sm text-gray-500 dark:text-gray-400 flex items-center">
+                <CalendarIcon className="w-4 h-4 mr-2 flex-shrink-0" />
+                {formattedDate}
+              </p>
+              <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${slotColor}`}>
+                  {details.timeSlot}
+              </span>
+          </div>
           <p className="font-semibold text-lg mt-1 text-gray-800 dark:text-gray-200">{details.text}</p>
+          
+          {/* Customer Details Section */}
+          {(details.customerName || details.customerMobile) && (
+            <div className="flex flex-wrap items-center text-sm text-gray-600 dark:text-gray-300 mt-2 gap-x-4 gap-y-1">
+              {details.customerName && (
+                <div className="flex items-center">
+                  <UserCircleIcon className="w-4 h-4 mr-1.5 text-gray-400" />
+                  <span>{details.customerName}</span>
+                </div>
+              )}
+              {details.customerMobile && (
+                <div className="flex items-center">
+                  <PhoneIcon className="w-4 h-4 mr-1.5 text-gray-400" />
+                  <span>{details.customerMobile}</span>
+                </div>
+              )}
+            </div>
+          )}
         </div>
         <div className={`flex items-center text-sm px-3 py-1 rounded-full ${statusClasses} flex-shrink-0`}>
           <StatusIcon className={`w-4 h-4 mr-1.5 ${statusIconColor}`} />
@@ -80,23 +111,23 @@ const EventCard: React.FC<EventCardProps> = ({ date, details, onSettle, isAdmin 
 };
 
 interface PendingPaymentsPageProps {
-  events: EventWithDate[];
+  events: EventWithDateAndIndex[];
   totalAmount: number;
   onBack: () => void;
-  onSettlePayment: (dateKey: string) => void;
+  onSettlePayment: (dateKey: string, eventIndex: number) => void;
   isAdmin: boolean;
 }
 
 const PendingPaymentsPage: React.FC<PendingPaymentsPageProps> = ({ events, totalAmount, onBack, onSettlePayment, isAdmin }) => {
-  const [settleCandidate, setSettleCandidate] = useState<EventWithDate | null>(null);
+  const [settleCandidate, setSettleCandidate] = useState<EventWithDateAndIndex | null>(null);
 
-  const handleSettleClick = (event: EventWithDate) => {
+  const handleSettleClick = (event: EventWithDateAndIndex) => {
     setSettleCandidate(event);
   };
 
   const handleConfirmSettle = () => {
     if (settleCandidate) {
-      onSettlePayment(settleCandidate.date);
+      onSettlePayment(settleCandidate.date, settleCandidate.index);
       setSettleCandidate(null);
     }
   };
@@ -147,9 +178,9 @@ const PendingPaymentsPage: React.FC<PendingPaymentsPageProps> = ({ events, total
         <div>
           <h3 className="text-lg font-semibold mb-4 text-gray-700 dark:text-gray-300">Pending Orders ({events.length})</h3>
           <div className="space-y-4">
-            {events.map((event) => (
+            {events.map((event, i) => (
               <EventCard 
-                key={event.date} 
+                key={`${event.date}-${i}`} 
                 date={event.date} 
                 details={event.details} 
                 onSettle={() => handleSettleClick(event)}

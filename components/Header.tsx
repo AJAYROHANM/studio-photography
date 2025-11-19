@@ -1,16 +1,15 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { User } from '../types';
-import { CameraIcon, UserCircleIcon, UsersIcon, ChevronDownIcon, SearchIcon, XIcon } from './icons/Icons';
+import { CameraIcon, UserCircleIcon, UsersIcon, ChevronDownIcon } from './icons/Icons';
 
 interface HeaderProps {
   currentUser: User;
   onLogout: () => void;
   onNavigate: (view: 'dashboard' | 'profile' | 'user_management') => void;
-  searchQuery: string;
-  onSearchChange: (query: string) => void;
 }
 
-const Header: React.FC<HeaderProps> = ({ currentUser, onLogout, onNavigate, searchQuery, onSearchChange }) => {
+const Header: React.FC<HeaderProps> = ({ currentUser, onLogout, onNavigate }) => {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -30,31 +29,10 @@ const Header: React.FC<HeaderProps> = ({ currentUser, onLogout, onNavigate, sear
     <header className="bg-white dark:bg-gray-800 shadow-sm p-4 flex justify-between items-center flex-shrink-0 border-b border-gray-200 dark:border-gray-700">
       <div className="flex items-center space-x-3 cursor-pointer" onClick={() => onNavigate('dashboard')}>
         <CameraIcon className="w-8 h-8 text-brand-primary" />
-        <h1 className="text-xl sm:text-2xl font-bold text-gray-800 dark:text-gray-200 hidden sm:block">PhotoManager</h1>
+        <h1 className="text-xl sm:text-2xl font-bold text-gray-800 dark:text-gray-200 hidden sm:block">Eventify</h1>
       </div>
 
       <div className="flex items-center space-x-2 sm:space-x-4">
-        <div className="relative w-full max-w-xs">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <SearchIcon className="h-5 w-5 text-gray-400" />
-            </div>
-            <input
-                type="text"
-                placeholder="Search..."
-                value={searchQuery}
-                onChange={(e) => onSearchChange(e.target.value)}
-                className="block w-full bg-gray-100 dark:bg-gray-700 border border-transparent rounded-md py-2 pl-10 pr-10 text-sm placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:bg-white dark:focus:bg-gray-900 focus:border-brand-primary focus:ring-1 focus:ring-brand-primary transition-colors"
-                aria-label="Search events"
-            />
-            {searchQuery && (
-                <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
-                    <button onClick={() => onSearchChange('')} className="p-1 rounded-full text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none" aria-label="Clear search">
-                        <XIcon className="h-4 w-4" />
-                    </button>
-                </div>
-            )}
-        </div>
-      
         <div className="relative" ref={dropdownRef}>
           <button
             onClick={() => setIsDropdownOpen(!isDropdownOpen)}

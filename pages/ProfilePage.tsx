@@ -1,17 +1,15 @@
-import React, { useState } from 'react';
+
+import React from 'react';
 import { User } from '../types';
 import { ChevronLeftIcon, PencilIcon, UserCircleIcon, PhoneIcon } from '../components/icons/Icons';
-import UserModal from '../components/UserModal';
 
 interface ProfilePageProps {
   user: User;
-  onUpdateUser: (user: User) => void;
+  onEditProfile: (user: User) => void;
   onBack: () => void;
 }
 
-const ProfilePage: React.FC<ProfilePageProps> = ({ user, onUpdateUser, onBack }) => {
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-
+const ProfilePage: React.FC<ProfilePageProps> = ({ user, onEditProfile, onBack }) => {
   return (
     <div className="animate-fade-in">
       <header className="flex items-center mb-6">
@@ -54,7 +52,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user, onUpdateUser, onBack })
 
         <div className="mt-8 flex justify-end">
           <button
-            onClick={() => setIsEditModalOpen(true)}
+            onClick={() => onEditProfile(user)}
             className="flex items-center px-4 py-2 bg-brand-primary text-white font-semibold rounded-lg shadow-md hover:bg-brand-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-primary transition-colors"
           >
             <PencilIcon className="w-4 h-4 mr-2" />
@@ -62,14 +60,6 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user, onUpdateUser, onBack })
           </button>
         </div>
       </div>
-
-      <UserModal 
-        isOpen={isEditModalOpen}
-        onClose={() => setIsEditModalOpen(false)}
-        onSave={onUpdateUser}
-        userToEdit={user}
-        isAdmin={false}
-      />
       <style>{`
         @keyframes fade-in {
           from { opacity: 0; transform: translateY(10px); }

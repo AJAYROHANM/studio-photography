@@ -1,31 +1,19 @@
+
 import React, { useState } from 'react';
 import { User } from '../types';
 import { ChevronLeftIcon, PencilIcon, TrashIcon } from '../components/icons/Icons';
-import UserModal from '../components/UserModal';
 import ConfirmationModal from '../components/ConfirmationModal';
 
 interface UserManagementPageProps {
   users: User[];
-  onAddUser: (user: User) => void;
-  onUpdateUser: (user: User) => void;
+  onAddUserClick: () => void;
+  onEditUser: (user: User) => void;
   onDeleteUser: (userId: string) => void;
   onBack: () => void;
 }
 
-const UserManagementPage: React.FC<UserManagementPageProps> = ({ users, onAddUser, onUpdateUser, onDeleteUser, onBack }) => {
-  const [isUserModalOpen, setIsUserModalOpen] = useState(false);
-  const [userToEdit, setUserToEdit] = useState<User | null>(null);
+const UserManagementPage: React.FC<UserManagementPageProps> = ({ users, onAddUserClick, onEditUser, onDeleteUser, onBack }) => {
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
-  
-  const handleAddClick = () => {
-    setUserToEdit(null);
-    setIsUserModalOpen(true);
-  };
-  
-  const handleEditClick = (user: User) => {
-    setUserToEdit(user);
-    setIsUserModalOpen(true);
-  };
   
   const handleDeleteClick = (user: User) => {
     setUserToDelete(user);
@@ -52,7 +40,7 @@ const UserManagementPage: React.FC<UserManagementPageProps> = ({ users, onAddUse
             <h2 className="text-xl sm:text-2xl font-bold text-gray-800 dark:text-gray-200">User Management</h2>
         </div>
         <button
-            onClick={handleAddClick}
+            onClick={onAddUserClick}
             className="px-4 py-2 bg-brand-primary text-white font-semibold rounded-lg shadow-md hover:bg-brand-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-primary transition-colors text-sm"
           >
             Add User
@@ -90,7 +78,7 @@ const UserManagementPage: React.FC<UserManagementPageProps> = ({ users, onAddUse
                   <td className="px-6 py-4 hidden sm:table-cell">{user.phone}</td>
                   <td className="px-6 py-4">
                     <div className="flex items-center space-x-2">
-                        <button onClick={() => handleEditClick(user)} className="p-2 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700">
+                        <button onClick={() => onEditUser(user)} className="p-2 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700">
                             <PencilIcon className="w-5 h-5" />
                         </button>
                         <button onClick={() => handleDeleteClick(user)} className="p-2 text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700">
@@ -104,14 +92,6 @@ const UserManagementPage: React.FC<UserManagementPageProps> = ({ users, onAddUse
           </table>
         </div>
       </div>
-
-      <UserModal
-        isOpen={isUserModalOpen}
-        onClose={() => setIsUserModalOpen(false)}
-        onSave={userToEdit ? onUpdateUser : onAddUser}
-        userToEdit={userToEdit}
-        isAdmin={true}
-      />
       
       <ConfirmationModal
         isOpen={!!userToDelete}
