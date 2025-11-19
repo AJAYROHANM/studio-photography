@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { EventData, EventDetails, User, EventDetailsWithUser, Reminder } from '../types';
 import DashboardCard from '../components/DashboardCard';
 import Calendar from '../components/Calendar';
@@ -62,66 +62,89 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser, users, onLog
 
   // --- Notification Logic Start ---
   useEffect(() => {
-    // Request permission on mount
+    // Request permission on mount if default
     if ('Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission();
+      Notification.requestPermission().catch(err => console.error("Notification permission error:", err));
     }
   }, []);
 
   const sendNotification = (title: string, body: string) => {
     if ('Notification' in window && Notification.permission === 'granted') {
-       new Notification(title, {
-         body,
-         icon: '/icon-192.png', // Assuming this exists from manifest
-       });
+       try {
+         new Notification(title, {
+           body,
+           icon: '/icon-192.png', 
+         });
+       } catch (e) {
+         console.error("Failed to send notification", e);
+       }
     }
   };
 
   // Check for upcoming events and send notifications
+  // We use a ref to keep track of the interval to clear it properly
   useEffect(() => {
-    if (Object.keys(events).length === 0) return;
+    const checkAndSendNotifications = () => {
+        if (Object.keys(events).length === 0) return;
 
-    const today = new Date();
-    const tomorrow = new Date();
-    tomorrow.setDate(today.getDate() + 1);
+        const today = new Date();
+        const tomorrow = new Date();
+        tomorrow.setDate(today.getDate() + 1);
 
-    const todayKey = getLocalDateKey(today);
-    const tomorrowKey = getLocalDateKey(tomorrow);
+        const todayKey = getLocalDateKey(today);
+        const tomorrowKey = getLocalDateKey(tomorrow);
 
-    const keysToCheck = [
-      { key: todayKey, label: 'Today' },
-      { key: tomorrowKey, label: 'Tomorrow' }
-    ];
+        const keysToCheck = [
+          { key: todayKey, label: 'Today' },
+          { key: tomorrowKey, label: 'Tomorrow' }
+        ];
 
-    // Use sessionStorage to track sent notifications for this session to avoid spam
-    const notifiedEvents = JSON.parse(sessionStorage.getItem('notifiedEvents') || '[]');
-    const newNotifiedEvents = [...notifiedEvents];
-    let hasNewNotifications = false;
-
-    keysToCheck.forEach(({ key, label }) => {
-      const dayEvents = events[key] as EventDetailsWithUser[] || [];
-      dayEvents.forEach(event => {
-        if (event.status !== 'completed') {
-          // Create a unique ID for the notification
-          const uniqueId = `${key}-${event.timeSlot}-${event.text}`;
-          
-          if (!notifiedEvents.includes(uniqueId)) {
-             const title = `Upcoming Event: ${event.text} (${label})`;
-             const body = `Customer: ${event.customerName || 'N/A'}\nContact: ${event.customerMobile || 'N/A'}\nPlace: ${event.place}\nSession: ${event.timeSlot}`;
-             
-             sendNotification(title, body);
-             
-             newNotifiedEvents.push(uniqueId);
-             hasNewNotifications = true;
-          }
+        // Use sessionStorage to track sent notifications for this session to avoid spam
+        let notifiedEvents: string[] = [];
+        try {
+             const stored = sessionStorage.getItem('notifiedEvents');
+             notifiedEvents = stored ? JSON.parse(stored) : [];
+             if (!Array.isArray(notifiedEvents)) notifiedEvents = [];
+        } catch (e) {
+            notifiedEvents = [];
         }
-      });
-    });
 
-    if (hasNewNotifications) {
-      sessionStorage.setItem('notifiedEvents', JSON.stringify(newNotifiedEvents));
-    }
+        const newNotifiedEvents = [...notifiedEvents];
+        let hasNewNotifications = false;
 
+        keysToCheck.forEach(({ key, label }) => {
+          const dayEvents = events[key] as EventDetailsWithUser[] || [];
+          dayEvents.forEach(event => {
+            if (event.status !== 'completed') {
+              // Create a unique ID for the notification
+              const uniqueId = `${key}-${event.timeSlot}-${event.text}`;
+              
+              if (!notifiedEvents.includes(uniqueId)) {
+                 const title = `Upcoming Event: ${event.text} (${label})`;
+                 // Format: Customer Name, Event Name (Title), Event Place, Session
+                 const body = `Customer: ${event.customerName || 'N/A'}\nPlace: ${event.place}\nSession: ${event.timeSlot}\nContact: ${event.customerMobile || 'N/A'}`;
+                 
+                 sendNotification(title, body);
+                 
+                 newNotifiedEvents.push(uniqueId);
+                 hasNewNotifications = true;
+              }
+            }
+          });
+        });
+
+        if (hasNewNotifications) {
+          sessionStorage.setItem('notifiedEvents', JSON.stringify(newNotifiedEvents));
+        }
+    };
+
+    // Check immediately
+    checkAndSendNotifications();
+
+    // Check periodically (every 1 hour) to ensure notifications trigger if the app is left open
+    const intervalId = setInterval(checkAndSendNotifications, 60 * 60 * 1000);
+
+    return () => clearInterval(intervalId);
   }, [events]);
   // --- Notification Logic End ---
 
