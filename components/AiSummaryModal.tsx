@@ -37,11 +37,23 @@ const AiSummaryModal: React.FC<AiSummaryModalProps> = ({ isOpen, onClose, events
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
       
+      const today = new Date();
+      const thirtyDaysAgo = new Date(today);
+      thirtyDaysAgo.setDate(today.getDate() - 30);
+
       // Flatten events structure and sanitize data for the prompt
       // CRITICAL: We create a new object with only the necessary string/number fields.
       // We explicitly DO NOT pass the `userPhoto` field or the full event object to avoid sending base64 images.
-      const allEvents = Object.entries(events).flatMap(([date, list]) => 
-        (list as EventDetailsWithUser[]).map(event => ({ 
+      const allEvents = Object.entries(events).flatMap(([date, list]) => {
+        const eventDate = new Date(date);
+        // Filter: Include all pending events regardless of date (for accurate pending totals),
+        // and any event (pending or completed) from the last 30 days onwards.
+        // This filters out old completed history to keep payload size manageable.
+        const isRecentOrFuture = eventDate >= thirtyDaysAgo;
+
+        return (list as EventDetailsWithUser[])
+          .filter(event => event.status === 'pending' || isRecentOrFuture)
+          .map(event => ({ 
             date,
             description: event.text,
             amount: event.amount,
@@ -51,8 +63,17 @@ const AiSummaryModal: React.FC<AiSummaryModalProps> = ({ isOpen, onClose, events
             customerName: event.customerName,
             // If admin, include the user name, but never the photo
             userName: isAdmin ? event.userName : undefined 
-        }))
-      );
+          }));
+      });
+
+      // Limit to 200 events to prevent hitting XHR body size limits or token limits
+      // If user has massive amounts of data, we prioritize the most relevant ones (flatmap usually preserves order if dates were sorted, but keys might not be).
+      // Let's sort by date just in case to keep most relevant.
+      allEvents.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+      // Take the last 200 items (assuming they are chronological, this keeps recent/future)
+      // Or actually, since we want pending + upcoming, let's just slice.
+      const limitedEvents = allEvents.length > 200 ? allEvents.slice(allEvents.length - 200) : allEvents;
 
       const prompt = `
         You are a helpful assistant for a photographer using a dashboard to manage their photo shoot orders.
@@ -70,7 +91,7 @@ const AiSummaryModal: React.FC<AiSummaryModalProps> = ({ isOpen, onClose, events
         - Format the key points as a bulleted list.
 
         Event data:
-        ${JSON.stringify(allEvents, null, 2)}
+        ${JSON.stringify(limitedEvents, null, 2)}
       `;
       
       const response = await ai.models.generateContent({

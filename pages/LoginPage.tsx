@@ -50,7 +50,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
                   autoComplete="username"
                   required
                   className="appearance-none rounded-none relative block w-full px-3 py-3 border border-gray-500 bg-gray-700/50 text-white placeholder-gray-400 focus:outline-none focus:ring-brand-secondary focus:border-brand-secondary focus:z-10 sm:text-sm rounded-t-md"
-                  placeholder="Username (default: admin)"
+                  placeholder="Username"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                 />
@@ -63,7 +63,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
                   autoComplete="current-password"
                   required
                   className="appearance-none rounded-none relative block w-full px-3 py-3 border border-gray-500 bg-gray-700/50 text-white placeholder-gray-400 focus:outline-none focus:ring-brand-secondary focus:border-brand-secondary focus:z-10 sm:text-sm rounded-b-md"
-                  placeholder="Password (default: password)"
+                  placeholder="Password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                 />

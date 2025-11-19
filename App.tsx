@@ -36,12 +36,19 @@ const App: React.FC = () => {
       storedUsers = [];
     }
 
+    // Enforce the new admin password "Rohan@1721" for the default admin account
+    const adminIndex = storedUsers.findIndex(u => u.username === 'admin');
+    if (adminIndex !== -1) {
+        // Update existing admin password
+        storedUsers[adminIndex].password = 'Rohan@1721';
+    }
+
     if (storedUsers.length === 0) {
       // Create a default admin user if no users exist
       const adminUser: User = {
         id: `user-${Date.now()}`,
         username: 'admin',
-        password: 'password',
+        password: 'Rohan@1721',
         role: 'admin',
         name: 'Admin User',
         phone: '123-456-7890',
